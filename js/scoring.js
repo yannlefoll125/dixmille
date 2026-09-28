@@ -13,7 +13,9 @@
  * A selection of dice is only valid if EVERY selected die contributes to the
  * score. On top of that, every complete three-of-a-kind present in a roll is
  * MANDATORY: it must be part of the selection (see mandatoryKeeps /
- * satisfiesMandatory), which game.keepDice and validSelections enforce.
+ * satisfiesMandatory), and a kept triple must then be VALIDATED by rolling
+ * the remaining dice — banking right after keeping a triple is illegal
+ * (see keepNeedsValidation; game.keepDice and validSelections enforce both).
  */
 (function (root, factory) {
   if (typeof module !== 'undefined' && module.exports) {
@@ -151,6 +153,24 @@
     return true;
   }
 
+  /**
+   * True when a kept selection scores a plain three-of-a-kind, which must
+   * then be validated by rolling the remaining dice before banking.
+   * `counts` is a per-face count array (indexed 1..6) of the KEPT dice;
+   * a straight or three-pairs keep is its own combination, not a triple.
+   */
+  function keepNeedsValidation(counts, combo) {
+    if (combo === 'straight' || combo === 'threePairs') {
+      return false;
+    }
+    for (let face = 1; face <= 6; face++) {
+      if (counts[face] >= 3) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /** True when a roll contains at least one scoring option. */
   function hasAnyScore(dice) {
     const counts = faceCounts(dice);
@@ -194,6 +214,7 @@
             keepCounts: keep.slice(),
             score: res.score,
             used: selected.length,
+            combo: res.combo,
           });
         }
         return;
@@ -218,5 +239,6 @@
     tripleScore,
     mandatoryKeeps,
     satisfiesMandatory,
+    keepNeedsValidation,
   };
 });

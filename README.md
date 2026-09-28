@@ -34,12 +34,17 @@ installed on your phone from there.
 - Six dice; set aside scoring dice after each roll, then either roll the
   remaining dice or bank the turn total.
 - **Farkle**: a roll with no scoring dice wipes the points gathered this
-  turn. If it was a **fresh throw** of all six dice (turn start or right
-  after hot dice) and the player is already on the board, they also lose
-  **2,000** from their banked score.
-- **Hot dice**: when all six dice score, roll all six again.
+  turn. If it was the **fresh throw** (the first throw of the turn) and the
+  player is already on the board, they also lose **2,000** from their banked
+  score — the score can go negative.
+- **Hot dice**: when all six dice score, roll all six again (a farkle on
+  that re-roll loses the turn points but carries no fresh-throw penalty).
 - **Mandatory triples**: every complete three-of-a-kind in a roll must be
-  taken and validated — it cannot be left on the table.
+  **taken and validated** — it cannot be left on the table, and the player
+  cannot bank right after keeping it: the remaining dice must be rolled
+  first. A consequence of the exact finish: a triple can never be the
+  final scoring move, since validating it forces a roll whose points would
+  pass the target.
 - Scoring: single 1 = 100, single 5 = 50, three 1s = 1,000, three of a kind =
   face × 100 (six of a face = two triples), full suite 1–6 = 2,000,
   three pairs = 1,500 (four of a kind + a pair counts). No other specials.

@@ -4,10 +4,14 @@
  *  - Opening threshold: 750 in a single turn before the first bank.
  *  - The target (10,000) must be reached EXACTLY: banking a total that would
  *    pass it is illegal, and banking exactly 10,000 wins on the spot.
- *  - A fresh throw (all six dice) that scores nothing costs 2,000 banked
- *    points — unless the player has not started scoring yet (not on board).
- *  - Every complete three-of-a-kind in a roll must be taken and validated
- *    (enforced by Scoring.satisfiesMandatory in keepDice).
+ *  - A fresh throw (the FIRST throw of a turn) that scores nothing costs
+ *    2,000 banked points — unless the player has not started scoring yet
+ *    (not on board). The score may go negative. A farkle later in the turn
+ *    (including right after hot dice) only loses the turn points.
+ *  - Every complete three-of-a-kind in a roll must be taken AND validated:
+ *    after keeping a triple the player cannot bank until the remaining dice
+ *    have been rolled and a later keep contains no triple
+ *    (Scoring.satisfiesMandatory + Scoring.keepNeedsValidation).
  *
  * The Game class is UI-agnostic: it mutates state and returns event objects
  * that the UI layer renders. Human and AI players share the same transitions
@@ -68,6 +72,7 @@
       this.roll = []; // dice currently on the table, awaiting selection
       this.kept = []; // dice set aside this turn (for display)
       this.phase = 'awaitRoll'; // awaitRoll | awaitKeep | farkled | gameOver
+      this.mustValidate = false; // last keep held a triple awaiting validation
       this.winner = -1;
       this.round = 1;
     }
@@ -91,8 +96,9 @@
       if (this.phase !== 'awaitRoll' || this.winner >= 0) {
         return null;
       }
-      // A fresh throw = all six dice (turn start, or right after hot dice).
-      const fresh = this.diceLeft === 6;
+      // A fresh throw = the first throw of the turn (nothing scored yet;
+      // hot-dice re-rolls of all six dice are NOT fresh).
+      const fresh = this.turnScore === 0;
       this.roll = [];
       for (let i = 0; i < this.diceLeft; i++) {
         this.roll.push(rollDie(this.rng));
@@ -138,6 +144,12 @@
         return null;
       }
       this.turnScore += res.score;
+      // A kept triple must be validated by rolling on; the flag clears when
+      // a later keep contains no triple (each new triple re-arms it).
+      this.mustValidate = Scoring.keepNeedsValidation(
+        Scoring.faceCounts(selected),
+        res.combo
+      );
       this.kept = this.kept.concat(selected);
       this.roll = this.roll.filter((_, i) => !unique.includes(i));
       this.diceLeft = this.roll.length;
@@ -155,6 +167,7 @@
         combo: res.combo,
         turnScore: this.turnScore,
         hotDice,
+        needsValidation: this.mustValidate,
       };
     }
 
@@ -164,7 +177,8 @@
         this.phase === 'awaitRoll' &&
         this.turnScore > 0 &&
         this.turnScore >= this.openingFor(this.player) &&
-        !this.wouldOvershoot()
+        !this.wouldOvershoot() &&
+        !this.mustValidate
       );
     }
 
@@ -206,6 +220,7 @@
       this.diceLeft = 6;
       this.roll = [];
       this.kept = [];
+      this.mustValidate = false;
       const next = (this.currentPlayer + 1) % this.players.length;
       if (next === 0) {
         this.round += 1;
@@ -232,6 +247,7 @@
         roll: this.roll,
         kept: this.kept,
         phase: this.phase,
+        mustValidate: this.mustValidate,
         winner: this.winner,
         round: this.round,
       };
@@ -252,6 +268,7 @@
       game.roll = data.roll || [];
       game.kept = data.kept || [];
       game.phase = data.phase;
+      game.mustValidate = !!data.mustValidate;
       game.winner = data.winner;
       game.round = data.round || 1;
       return game;

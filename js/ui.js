@@ -211,10 +211,14 @@
       el.btnRoll.disabled = false;
       el.btnRoll.textContent = `Roll ${game.diceLeft} ${game.diceLeft === 1 ? 'die' : 'dice'}`;
       el.btnBank.disabled = !game.canBank();
-      el.selectionScore.textContent =
-        game.turnScore > 0 && game.wouldOvershoot()
-          ? `Banking would pass ${game.target} — you must roll on`
-          : '';
+      if (game.mustValidate) {
+        el.selectionScore.textContent =
+          'Three of a kind must be validated — roll the remaining dice';
+      } else if (game.turnScore > 0 && game.wouldOvershoot()) {
+        el.selectionScore.textContent = `Banking would pass ${game.target} — you must roll on`;
+      } else {
+        el.selectionScore.textContent = '';
+      }
       return;
     }
 
@@ -231,8 +235,13 @@
         : 'Select scoring dice';
       const wouldHave = game.turnScore + (legal ? res.score : 0);
       const overshoot = game.player.score + wouldHave > game.target;
+      const needsValidation =
+        legal && Scoring.keepNeedsValidation(Scoring.faceCounts(sel), res.combo);
       el.btnBank.disabled =
-        !legal || wouldHave < game.openingFor(game.player) || overshoot;
+        !legal ||
+        wouldHave < game.openingFor(game.player) ||
+        overshoot ||
+        needsValidation;
       if (sel.length === 0) {
         el.selectionScore.textContent = 'Tap dice to set them aside';
       } else if (res.valid && !mandatoryOk) {
@@ -245,8 +254,12 @@
             : res.combo === 'threePairs'
               ? ' — three pairs!'
               : '';
-        const overshootHint = overshoot ? ' (past 10,000 — cannot bank)' : '';
-        el.selectionScore.textContent = `Selected: +${res.score}${comboName}${overshootHint}`;
+        const hint = overshoot
+          ? ' (past 10,000 — cannot bank)'
+          : needsValidation
+            ? ' (triple: roll again to validate before banking)'
+            : '';
+        el.selectionScore.textContent = `Selected: +${res.score}${comboName}${hint}`;
       } else {
         el.selectionScore.textContent = 'Selection does not score';
       }
@@ -337,6 +350,9 @@
           ? ' (three pairs)'
           : '';
     logLine(`${playerName} keeps ${diceText}${comboText} for +${keep.score}`);
+    if (keep.needsValidation) {
+      logLine(`${playerName} must roll again to validate the three of a kind`);
+    }
     if (keep.hotDice) {
       setStatus('Hot dice! All six scored — roll again', 'hot');
       logLine(`${playerName} has hot dice!`);

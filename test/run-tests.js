@@ -138,6 +138,24 @@ test('validSelections only offers selections that take the triple', () => {
   assert.deepStrictEqual(scores, [200, 300]); // {2,2,2} and {2,2,2,1}
 });
 
+test('keepNeedsValidation: plain triples yes, singles/specials no', () => {
+  const counts = (dice) => Scoring.faceCounts(dice);
+  assert.strictEqual(Scoring.keepNeedsValidation(counts([2, 2, 2]), null), true);
+  assert.strictEqual(
+    Scoring.keepNeedsValidation(counts([1, 1, 1, 5]), null),
+    true
+  );
+  assert.strictEqual(Scoring.keepNeedsValidation(counts([1, 5]), null), false);
+  assert.strictEqual(
+    Scoring.keepNeedsValidation(counts([2, 2, 2, 2, 6, 6]), 'threePairs'),
+    false
+  );
+  assert.strictEqual(
+    Scoring.keepNeedsValidation(counts([1, 2, 3, 4, 5, 6]), 'straight'),
+    false
+  );
+});
+
 /* ---------- Farkle detection ---------- */
 
 test('2,3,4,6,6,3 has no score (farkle)', () => {
@@ -276,17 +294,18 @@ test('keep + bank updates the score and advances the turn', () => {
   const game = new Game({
     aiCount: 1,
     opening: 0,
-    rng: seededRng([1, 1, 1, 2, 3, 4]),
+    rng: seededRng([1, 5, 2, 3, 4, 6]),
   });
   const roll = game.rollDice();
   assert.strictEqual(roll.type, 'roll');
-  assert.deepStrictEqual(roll.roll, [1, 1, 1, 2, 3, 4]);
-  const keep = game.keepDice([0, 1, 2]);
-  assert.strictEqual(keep.score, 1000);
-  assert.strictEqual(game.diceLeft, 3);
+  assert.deepStrictEqual(roll.roll, [1, 5, 2, 3, 4, 6]);
+  const keep = game.keepDice([0, 1]);
+  assert.strictEqual(keep.score, 150);
+  assert.strictEqual(keep.needsValidation, false);
+  assert.strictEqual(game.diceLeft, 4);
   const bank = game.bank();
-  assert.strictEqual(bank.banked, 1000);
-  assert.strictEqual(game.players[0].score, 1000);
+  assert.strictEqual(bank.banked, 150);
+  assert.strictEqual(game.players[0].score, 150);
   assert.strictEqual(game.currentPlayer, 1);
 });
 
@@ -375,15 +394,43 @@ test('no fresh-throw penalty before the player has started scoring', () => {
   assert.strictEqual(game.players[0].score, 0);
 });
 
+test('no fresh-throw penalty on a hot-dice re-roll of six', () => {
+  const game = new Game({
+    aiCount: 1,
+    rng: seededRng([1, 1, 1, 5, 5, 5, /* hot-dice roll: */ 2, 3, 4, 6, 6, 3]),
+  });
+  game.players[0].score = 3000;
+  game.players[0].onBoard = true;
+  game.rollDice();
+  game.keepDice([0, 1, 2, 3, 4, 5]); // hot dice, +1500
+  const ev = game.rollDice(); // six dice again, but NOT the turn's fresh throw
+  assert.strictEqual(ev.type, 'farkle');
+  assert.strictEqual(ev.lost, 1500);
+  assert.strictEqual(ev.penalty, 0);
+  assert.strictEqual(game.players[0].score, 3000);
+});
+
+test('the score can go negative from fresh-throw penalties', () => {
+  const game = new Game({
+    aiCount: 1,
+    rng: seededRng([2, 3, 4, 6, 6, 3]),
+  });
+  game.players[0].score = 1000;
+  game.players[0].onBoard = true;
+  const ev = game.rollDice();
+  assert.strictEqual(ev.penalty, 2000);
+  assert.strictEqual(game.players[0].score, -1000);
+});
+
 test('banking exactly 10000 wins on the spot', () => {
   const game = new Game({
     aiCount: 1,
-    rng: seededRng([1, 1, 1, 2, 3, 4]),
+    rng: seededRng([1, 2, 2, 3, 4, 6]),
   });
-  game.players[0].score = 9000;
+  game.players[0].score = 9900;
   game.players[0].onBoard = true;
   game.rollDice();
-  game.keepDice([0, 1, 2]); // three 1s = 1000
+  game.keepDice([0]); // the lone 1 = 100 -> exactly 10000
   const bank = game.bank();
   assert.strictEqual(bank.won, true);
   assert.strictEqual(bank.total, 10000);
@@ -394,16 +441,57 @@ test('banking exactly 10000 wins on the spot', () => {
 test('banking past 10000 is illegal', () => {
   const game = new Game({
     aiCount: 1,
-    rng: seededRng([1, 1, 1, 2, 3, 4]),
+    rng: seededRng([1, 5, 2, 3, 4, 6]),
   });
-  game.players[0].score = 9500;
+  game.players[0].score = 9900;
   game.players[0].onBoard = true;
   game.rollDice();
-  game.keepDice([0, 1, 2]); // three 1s = 1000 -> 10500 would overshoot
+  game.keepDice([0, 1]); // 1 + 5 = 150 -> 10050 would overshoot
   assert.strictEqual(game.wouldOvershoot(), true);
   assert.strictEqual(game.canBank(), false);
   assert.strictEqual(game.bank(), null);
   assert.strictEqual(game.phase, 'awaitRoll'); // forced to roll on
+});
+
+test('a triple landing exactly on the target cannot end the game (must be validated)', () => {
+  // Needs 200; rolls three 2s: the triple must be taken (200 = exactly
+  // 10,000) but banking is illegal until it is validated by rolling on —
+  // and any later scoring keep would pass the target.
+  const game = new Game({
+    aiCount: 1,
+    rng: seededRng([2, 2, 2, 3, 4, 6]),
+  });
+  game.players[0].score = 9800;
+  game.players[0].onBoard = true;
+  game.rollDice();
+  assert.strictEqual(game.keepDice([3]), null); // cannot dodge the triple
+  const keep = game.keepDice([0, 1, 2]);
+  assert.strictEqual(keep.score, 200);
+  assert.strictEqual(keep.needsValidation, true);
+  assert.strictEqual(game.turnScore, 200); // would be exactly 10000...
+  assert.strictEqual(game.wouldOvershoot(), false);
+  assert.strictEqual(game.canBank(), false); // ...but the triple is unvalidated
+  assert.strictEqual(game.bank(), null);
+  assert.strictEqual(game.phase, 'awaitRoll'); // forced to roll the other three
+});
+
+test('a kept triple is validated by a later triple-free keep', () => {
+  const game = new Game({
+    aiCount: 1,
+    opening: 0,
+    rng: seededRng([2, 2, 2, 1, 3, 4, /* next roll: */ 5, 3]),
+  });
+  game.rollDice();
+  game.keepDice([0, 1, 2, 3]); // triple 2s + the 1 = 300
+  assert.strictEqual(game.mustValidate, true);
+  assert.strictEqual(game.canBank(), false);
+  game.rollDice(); // the two remaining dice: 5, 3
+  const keep = game.keepDice([0]); // the 5
+  assert.strictEqual(keep.score, 50);
+  assert.strictEqual(keep.needsValidation, false);
+  assert.strictEqual(game.mustValidate, false);
+  assert.strictEqual(game.canBank(), true);
+  assert.strictEqual(game.bank().banked, 350);
 });
 
 test('serialization round-trips', () => {

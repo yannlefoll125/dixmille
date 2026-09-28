@@ -7,9 +7,11 @@
  *
  * Decisions use the farkle probability for the number of dice that would be
  * rolled next, plus a per-difficulty banking threshold. The exact-10,000
- * rule shapes the endgame: a keep that lands exactly on the target is a win,
- * one that passes it dooms the turn, and near the target the AI banks small
- * amounts to creep to an exact finish.
+ * rule shapes the endgame: a keep that lands exactly on the target is a win
+ * — unless it holds a triple, which must be validated by rolling on and so
+ * can never be the finishing keep — one that passes the target dooms the
+ * turn, and near the target the AI banks small amounts to creep to an
+ * exact finish.
  */
 (function (root, factory) {
   if (typeof module !== 'undefined' && module.exports) {
@@ -62,10 +64,16 @@
         (1 - FARKLE_P[remaining]) * ROLL_GAIN[remaining] * profile.riskFactor;
       let value = opt.score + upside;
       const totalAfter = banked + turn + opt.score;
-      if (totalAfter === target) {
-        value += 100000; // banking after this keep wins on the spot
-      } else if (totalAfter > target) {
+      const needsValidation = Scoring.keepNeedsValidation(
+        opt.keepCounts,
+        opt.combo
+      );
+      if (totalAfter > target) {
         value -= 100000; // past the target: this turn can no longer bank
+      } else if (totalAfter === target) {
+        // Exact hit: instant win — unless the keep holds a triple, which
+        // forces a validation roll whose scoring dice would overshoot.
+        value += needsValidation ? -100000 : 100000;
       }
       if (value > bestValue) {
         bestValue = value;
