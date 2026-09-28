@@ -1,5 +1,5 @@
 /* Service worker: pre-cache the app shell so the game runs fully offline. */
-const CACHE_NAME = 'dixmille-v1';
+const CACHE_NAME = 'dixmille-v2';
 
 const ASSETS = [
   './',

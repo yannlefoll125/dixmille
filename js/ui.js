@@ -65,7 +65,6 @@
       }
       setSegmented('opt-ai-count', s.aiCount || 1);
       setSegmented('opt-difficulty', s.difficulty || 'balanced');
-      setSegmented('opt-opening', s.opening != null ? s.opening : 500);
     } catch (e) {
       /* corrupted settings: keep defaults */
     }
@@ -212,32 +211,42 @@
       el.btnRoll.disabled = false;
       el.btnRoll.textContent = `Roll ${game.diceLeft} ${game.diceLeft === 1 ? 'die' : 'dice'}`;
       el.btnBank.disabled = !game.canBank();
-      el.selectionScore.textContent = '';
+      el.selectionScore.textContent =
+        game.turnScore > 0 && game.wouldOvershoot()
+          ? `Banking would pass ${game.target} — you must roll on`
+          : '';
       return;
     }
 
     if (game.phase === 'awaitKeep') {
       const sel = selectedDice();
       const res = Scoring.scoreSelection(sel);
+      const mandatoryOk = Scoring.satisfiesMandatory(game.roll, sel);
+      const legal = res.valid && mandatoryOk;
       const left = game.roll.length - sel.length;
       const nextCount = left === 0 ? 6 : left;
-      el.btnRoll.disabled = !res.valid;
-      el.btnRoll.textContent = res.valid
+      el.btnRoll.disabled = !legal;
+      el.btnRoll.textContent = legal
         ? `Keep & roll ${nextCount}`
         : 'Select scoring dice';
-      const wouldHave = game.turnScore + (res.valid ? res.score : 0);
+      const wouldHave = game.turnScore + (legal ? res.score : 0);
+      const overshoot = game.player.score + wouldHave > game.target;
       el.btnBank.disabled =
-        !res.valid || wouldHave < game.openingFor(game.player);
+        !legal || wouldHave < game.openingFor(game.player) || overshoot;
       if (sel.length === 0) {
         el.selectionScore.textContent = 'Tap dice to set them aside';
-      } else if (res.valid) {
+      } else if (res.valid && !mandatoryOk) {
+        el.selectionScore.textContent =
+          'Three of a kind must be taken — select it too';
+      } else if (legal) {
         const comboName =
           res.combo === 'straight'
-            ? ' — straight!'
+            ? ' — full suite!'
             : res.combo === 'threePairs'
               ? ' — three pairs!'
               : '';
-        el.selectionScore.textContent = `Selected: +${res.score}${comboName}`;
+        const overshootHint = overshoot ? ' (past 10,000 — cannot bank)' : '';
+        el.selectionScore.textContent = `Selected: +${res.score}${comboName}${overshootHint}`;
       } else {
         el.selectionScore.textContent = 'Selection does not score';
       }
@@ -323,7 +332,7 @@
     const diceText = keep.kept.join(' ');
     const comboText =
       keep.combo === 'straight'
-        ? ' (straight)'
+        ? ' (full suite)'
         : keep.combo === 'threePairs'
           ? ' (three pairs)'
           : '';
@@ -335,11 +344,21 @@
   }
 
   function handleFarkle(ev) {
-    setStatus(
-      `Farkle! ${ev.lost > 0 ? `${ev.lost} points lost` : 'No score'}`,
-      'farkle'
+    const bits = [];
+    if (ev.lost > 0) {
+      bits.push(`${ev.lost} turn points lost`);
+    }
+    if (ev.penalty > 0) {
+      bits.push(`−${ev.penalty} from the score`);
+    }
+    setStatus(`Farkle! ${bits.length ? bits.join(', ') : 'No score'}`, 'farkle');
+    logLine(
+      `${game.player.name} farkles` +
+        (ev.lost > 0 ? ` and loses ${ev.lost}` : '') +
+        (ev.penalty > 0
+          ? ` — fresh throw scored nothing: −${ev.penalty} (now ${ev.total})`
+          : '')
     );
-    logLine(`${game.player.name} farkles${ev.lost > 0 ? ` and loses ${ev.lost}` : ''}`);
     renderAll({ animate: true });
     const wasHuman = !game.player.isAI;
     const token = aiToken; // a new game invalidates this pending timeout
@@ -356,8 +375,8 @@
   function handleBank(ev) {
     const p = game.players[ev.playerIndex];
     logLine(`${p.name} banks ${ev.banked} → ${ev.total}`);
-    if (ev.finalRound) {
-      logLine(`${p.name} reached ${game.target}! Last round for everyone else.`);
+    if (ev.won) {
+      logLine(`${p.name} reached exactly ${game.target} and wins!`);
     }
     saveGame();
     if (game.phase === 'gameOver') {
@@ -380,11 +399,10 @@
       runAITurn();
     } else {
       let msg = 'Your turn — roll the dice';
-      if (game.finalRound) {
-        const rival = game.bestRivalScore(game.currentPlayer);
-        msg = `Last chance! Beat ${rival} to win`;
-      } else if (!p.onBoard && game.opening > 0) {
+      if (!p.onBoard && game.opening > 0) {
         msg = `Your turn — score ${game.opening} in one turn to get on the board`;
+      } else if (game.target - p.score <= 1000) {
+        msg = `Your turn — you need exactly ${game.target - p.score} to win`;
       }
       setStatus(msg);
       renderAll();
@@ -425,7 +443,11 @@
           return;
         }
 
-        const choice = AI.chooseKeep(game.roll, profile);
+        const choice = AI.chooseKeep(game.roll, profile, {
+          bankedScore: player.score,
+          turnScore: game.turnScore,
+          target: game.target,
+        });
         if (!choice) {
           break; // defensive: rollDice() already detects farkles
         }
@@ -463,8 +485,6 @@
             bankedScore: player.score,
             opening: game.openingFor(player),
             target: game.target,
-            bestRival: game.bestRivalScore(game.currentPlayer),
-            finalRound: game.finalRound,
           },
           profile
         );
@@ -493,7 +513,6 @@
       name: $('opt-name').value.trim() || 'You',
       aiCount: parseInt(readSegmented('opt-ai-count'), 10) || 1,
       difficulty: readSegmented('opt-difficulty') || 'balanced',
-      opening: parseInt(readSegmented('opt-opening'), 10) || 0,
     };
     saveSettings(settings);
 
@@ -503,14 +522,13 @@
       playerName: settings.name,
       aiCount: settings.aiCount,
       difficulty: settings.difficulty,
-      opening: settings.opening,
     });
     selection.clear();
     el.log.innerHTML = '';
     el.overlayGameover.classList.add('hidden');
     el.screenSetup.classList.add('hidden');
     el.screenGame.classList.remove('hidden');
-    logLine(`New game: first to ${game.target} wins.`);
+    logLine(`New game: first to reach exactly ${game.target} wins.`);
     startTurn();
   }
 

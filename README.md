@@ -29,26 +29,33 @@ repository settings, under **Pages**, set the source to **GitHub Actions**.
 The app is then served at `https://<user>.github.io/dixmille/` and can be
 installed on your phone from there.
 
-## Rules implemented
+## Rules implemented (house rules)
 
-- Six dice; set aside at least one scoring die after each roll, then either
-  roll the remaining dice or bank the turn total.
-- **Farkle**: a roll with no scoring dice wipes the points gathered this turn.
+- Six dice; set aside scoring dice after each roll, then either roll the
+  remaining dice or bank the turn total.
+- **Farkle**: a roll with no scoring dice wipes the points gathered this
+  turn. If it was a **fresh throw** of all six dice (turn start or right
+  after hot dice) and the player is already on the board, they also lose
+  **2,000** from their banked score.
 - **Hot dice**: when all six dice score, roll all six again.
+- **Mandatory triples**: every complete three-of-a-kind in a roll must be
+  taken and validated — it cannot be left on the table.
 - Scoring: single 1 = 100, single 5 = 50, three 1s = 1,000, three of a kind =
-  face × 100, each extra matching die doubles the value, straight 1–6 = 1,500,
-  three pairs = 1,500 (four of a kind + a pair counts).
-- **Opening**: until a player is on the board, they must reach the opening
-  score (configurable: none / 500 / 750 / 1,000) in a single turn to bank.
-- First to **10,000** triggers the final round: every other player gets one
-  last turn, then the highest total wins.
+  face × 100 (six of a face = two triples), full suite 1–6 = 2,000,
+  three pairs = 1,500 (four of a kind + a pair counts). No other specials.
+- **Opening**: until a player is on the board, they must score **750** in a
+  single turn to bank.
+- **Exact finish**: the first player to bank **exactly 10,000** wins on the
+  spot. Banking a total that would pass 10,000 is illegal; the player must
+  keep rolling instead.
 
 ## Computer players
 
 Three play styles (cautious / balanced / bold) that weigh the farkle
 probability for the remaining dice against the points at risk, respect the
-opening threshold, and keep pushing in the final round until they beat the
-leader.
+opening threshold, and play the exact-10,000 endgame: they bank a keep that
+lands exactly on the target, avoid keeps that pass it, and creep up in small
+banks when close.
 
 ## Development
 

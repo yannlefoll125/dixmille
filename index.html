@@ -44,15 +44,6 @@
           <button data-value="bold">Bold</button>
         </div>
       </label>
-      <label class="field">
-        <span>Opening score (first bank)</span>
-        <div class="segmented" id="opt-opening" role="radiogroup">
-          <button data-value="0">None</button>
-          <button data-value="500" class="selected">500</button>
-          <button data-value="750">750</button>
-          <button data-value="1000">1000</button>
-        </div>
-      </label>
       <button id="btn-start" class="btn primary big">Start game</button>
       <button id="btn-resume" class="btn big hidden">Resume game</button>
     </div>
@@ -90,24 +81,30 @@
   <div id="overlay-rules" class="overlay hidden">
     <div class="panel scrollable">
       <h2>How to play</h2>
-      <p>Take turns rolling six dice. After each roll, set aside at least one
-      scoring die, then either roll the remaining dice or bank your points.
-      If a roll contains no scoring dice, you <strong>farkle</strong> and lose
-      everything gathered this turn. If all six dice score, you get
-      <strong>hot dice</strong>: roll all six again. First to
-      <strong>10,000</strong> triggers the last round; the highest total wins.</p>
+      <p>Take turns rolling six dice. After each roll, set aside scoring dice,
+      then either roll the remaining dice or bank your points. If a roll
+      contains no scoring dice, you <strong>farkle</strong>: the points
+      gathered this turn are lost, and if it was a <strong>fresh throw</strong>
+      of all six dice (and you are already on the board) you also lose
+      <strong>2,000</strong> from your score. If all six dice score, you get
+      <strong>hot dice</strong>: roll all six again.</p>
+      <p>Every <strong>three of a kind</strong> in a roll must be taken and
+      validated — you cannot leave it on the table.</p>
+      <p>The first player to reach <strong>exactly 10,000</strong> wins on the
+      spot. Banking a total that would pass 10,000 is not allowed — you must
+      keep rolling instead.</p>
       <h3>Scoring</h3>
       <table class="rules-table">
         <tr><td>Single 1</td><td>100</td></tr>
         <tr><td>Single 5</td><td>50</td></tr>
         <tr><td>Three 1s</td><td>1,000</td></tr>
         <tr><td>Three of a kind</td><td>face &times; 100</td></tr>
-        <tr><td>4 / 5 / 6 of a kind</td><td>doubles per extra die</td></tr>
-        <tr><td>Straight 1&ndash;6</td><td>1,500</td></tr>
+        <tr><td>Full suite 1&ndash;6</td><td>2,000</td></tr>
         <tr><td>Three pairs</td><td>1,500</td></tr>
       </table>
-      <p>Until you are on the board, you must reach the opening score in a
-      single turn before you may bank.</p>
+      <p>There are no other special combinations. Until you are on the board,
+      you must score <strong>750</strong> in a single turn before you may
+      bank.</p>
       <button id="btn-rules-close" class="btn primary big">Close</button>
     </div>
   </div>

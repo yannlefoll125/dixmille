@@ -1,5 +1,13 @@
 /*
- * Game state machine for 10,000.
+ * Game state machine for 10,000 — house rules:
+ *
+ *  - Opening threshold: 750 in a single turn before the first bank.
+ *  - The target (10,000) must be reached EXACTLY: banking a total that would
+ *    pass it is illegal, and banking exactly 10,000 wins on the spot.
+ *  - A fresh throw (all six dice) that scores nothing costs 2,000 banked
+ *    points — unless the player has not started scoring yet (not on board).
+ *  - Every complete three-of-a-kind in a roll must be taken and validated
+ *    (enforced by Scoring.satisfiesMandatory in keepDice).
  *
  * The Game class is UI-agnostic: it mutates state and returns event objects
  * that the UI layer renders. Human and AI players share the same transitions
@@ -15,6 +23,8 @@
   'use strict';
 
   const TARGET = 10000;
+  const OPENING = 750;
+  const FRESH_FARKLE_PENALTY = 2000;
 
   const AI_NAMES = ['Ada', 'Blaise', 'Curie'];
 
@@ -27,7 +37,7 @@
      * @param options {
      *   aiCount:    number of computer players (1..3),
      *   difficulty: 'cautious' | 'balanced' | 'bold',
-     *   opening:    minimum first-bank score (0 disables),
+     *   opening:    minimum first-bank score (default 750),
      *   playerName: display name for the human,
      *   rng:        optional random source (for tests),
      * }
@@ -36,7 +46,7 @@
       const opts = options || {};
       this.rng = opts.rng || Math.random;
       this.target = opts.target || TARGET;
-      this.opening = opts.opening != null ? opts.opening : 500;
+      this.opening = opts.opening != null ? opts.opening : OPENING;
       this.difficulty = opts.difficulty || 'balanced';
 
       this.players = [
@@ -57,8 +67,7 @@
       this.diceLeft = 6;
       this.roll = []; // dice currently on the table, awaiting selection
       this.kept = []; // dice set aside this turn (for display)
-      this.phase = 'awaitRoll'; // awaitRoll | awaitKeep | gameOver
-      this.finalRoundStarter = -1; // index of first player to reach target
+      this.phase = 'awaitRoll'; // awaitRoll | awaitKeep | farkled | gameOver
       this.winner = -1;
       this.round = 1;
     }
@@ -67,24 +76,14 @@
       return this.players[this.currentPlayer];
     }
 
-    get finalRound() {
-      return this.finalRoundStarter >= 0;
-    }
-
-    /** Highest banked score among players other than `index`. */
-    bestRivalScore(index) {
-      let best = 0;
-      this.players.forEach((p, i) => {
-        if (i !== index && p.score > best) {
-          best = p.score;
-        }
-      });
-      return best;
-    }
-
     /** Opening threshold still applying to the current player. */
     openingFor(player) {
       return player.onBoard ? 0 : this.opening;
+    }
+
+    /** True when banking the current turn total would pass the target. */
+    wouldOvershoot() {
+      return this.player.score + this.turnScore > this.target;
     }
 
     /** Roll the dice left in hand. Returns a 'roll' or 'farkle' event. */
@@ -92,14 +91,27 @@
       if (this.phase !== 'awaitRoll' || this.winner >= 0) {
         return null;
       }
+      // A fresh throw = all six dice (turn start, or right after hot dice).
+      const fresh = this.diceLeft === 6;
       this.roll = [];
       for (let i = 0; i < this.diceLeft; i++) {
         this.roll.push(rollDie(this.rng));
       }
       if (!Scoring.hasAnyScore(this.roll)) {
         const lost = this.turnScore;
+        let penalty = 0;
+        if (fresh && this.player.onBoard) {
+          penalty = FRESH_FARKLE_PENALTY;
+          this.player.score -= penalty;
+        }
         this.phase = 'farkled';
-        return { type: 'farkle', roll: this.roll.slice(), lost };
+        return {
+          type: 'farkle',
+          roll: this.roll.slice(),
+          lost,
+          penalty,
+          total: this.player.score,
+        };
       }
       this.phase = 'awaitKeep';
       return { type: 'roll', roll: this.roll.slice() };
@@ -107,7 +119,8 @@
 
     /**
      * Set aside the dice at the given indexes of the current roll.
-     * Returns a 'keep' event, or null when the selection is invalid.
+     * Returns a 'keep' event, or null when the selection is invalid —
+     * including when it leaves a mandatory three-of-a-kind on the table.
      */
     keepDice(indexes) {
       if (this.phase !== 'awaitKeep') {
@@ -117,6 +130,9 @@
         (i) => i >= 0 && i < this.roll.length
       );
       const selected = unique.map((i) => this.roll[i]);
+      if (!Scoring.satisfiesMandatory(this.roll, selected)) {
+        return null;
+      }
       const res = Scoring.scoreSelection(selected);
       if (!res.valid) {
         return null;
@@ -147,7 +163,8 @@
       return (
         this.phase === 'awaitRoll' &&
         this.turnScore > 0 &&
-        this.turnScore >= this.openingFor(this.player)
+        this.turnScore >= this.openingFor(this.player) &&
+        !this.wouldOvershoot()
       );
     }
 
@@ -165,9 +182,11 @@
         banked: this.turnScore,
         total: player.score,
       };
-      if (player.score >= this.target && this.finalRoundStarter < 0) {
-        this.finalRoundStarter = this.currentPlayer;
-        event.finalRound = true;
+      // Exact target: the game ends immediately, nobody can do better.
+      if (player.score === this.target) {
+        event.won = true;
+        this.finishGame(this.currentPlayer);
+        return event;
       }
       this.endTurn();
       return event;
@@ -188,12 +207,6 @@
       this.roll = [];
       this.kept = [];
       const next = (this.currentPlayer + 1) % this.players.length;
-      // The game ends once the turn passes back to whoever opened the final
-      // round: every other player has had exactly one last turn.
-      if (this.finalRound && next === this.finalRoundStarter) {
-        this.finishGame();
-        return;
-      }
       if (next === 0) {
         this.round += 1;
       }
@@ -201,17 +214,9 @@
       this.phase = 'awaitRoll';
     }
 
-    finishGame() {
+    finishGame(winnerIndex) {
       this.phase = 'gameOver';
-      let best = -1;
-      let bestScore = -1;
-      this.players.forEach((p, i) => {
-        if (p.score > bestScore) {
-          bestScore = p.score;
-          best = i;
-        }
-      });
-      this.winner = best;
+      this.winner = winnerIndex;
     }
 
     /** Serializable snapshot for persistence. */
@@ -227,7 +232,6 @@
         roll: this.roll,
         kept: this.kept,
         phase: this.phase,
-        finalRoundStarter: this.finalRoundStarter,
         winner: this.winner,
         round: this.round,
       };
@@ -248,12 +252,11 @@
       game.roll = data.roll || [];
       game.kept = data.kept || [];
       game.phase = data.phase;
-      game.finalRoundStarter = data.finalRoundStarter;
       game.winner = data.winner;
       game.round = data.round || 1;
       return game;
     }
   }
 
-  return { Game, TARGET, AI_NAMES };
+  return { Game, TARGET, OPENING, AI_NAMES };
 });

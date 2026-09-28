@@ -6,7 +6,10 @@
  *   2. Whether to bank the turn total or roll the remaining dice.
  *
  * Decisions use the farkle probability for the number of dice that would be
- * rolled next, plus a per-difficulty banking threshold.
+ * rolled next, plus a per-difficulty banking threshold. The exact-10,000
+ * rule shapes the endgame: a keep that lands exactly on the target is a win,
+ * one that passes it dooms the turn, and near the target the AI banks small
+ * amounts to creep to an exact finish.
  */
 (function (root, factory) {
   if (typeof module !== 'undefined' && module.exports) {
@@ -31,19 +34,21 @@
   };
 
   /**
-   * Pick the dice to keep from a roll.
+   * Pick the dice to keep from a roll. Only legal selections are considered
+   * (every mandatory three-of-a-kind taken).
    *
-   * Strategy: prefer the highest-scoring selection, but when plenty of dice
-   * remain, drop lone 5s (worth only 50) to keep more dice rolling. Selections
-   * that use every die (hot dice) are always attractive.
-   *
+   * @param ctx optional { bankedScore, turnScore, target } for exact-target
+   *            awareness; without it the AI just maximizes points.
    * @returns one entry from Scoring.validSelections(roll), or null on farkle.
    */
-  function chooseKeep(roll, profile) {
+  function chooseKeep(roll, profile, ctx) {
     const options = Scoring.validSelections(roll);
     if (options.length === 0) {
       return null;
     }
+    const banked = ctx ? ctx.bankedScore : 0;
+    const turn = ctx ? ctx.turnScore : 0;
+    const target = ctx ? ctx.target : Infinity;
 
     let best = null;
     let bestValue = -Infinity;
@@ -55,7 +60,13 @@
       // Value = points now + discounted upside of the dice still rolling.
       const upside =
         (1 - FARKLE_P[remaining]) * ROLL_GAIN[remaining] * profile.riskFactor;
-      const value = opt.score + upside;
+      let value = opt.score + upside;
+      const totalAfter = banked + turn + opt.score;
+      if (totalAfter === target) {
+        value += 100000; // banking after this keep wins on the spot
+      } else if (totalAfter > target) {
+        value -= 100000; // past the target: this turn can no longer bank
+      }
       if (value > bestValue) {
         bestValue = value;
         best = opt;
@@ -73,25 +84,28 @@
    *   bankedScore: the player's total on the scoreboard,
    *   opening:     minimum turn score required to get on the board (0 if none
    *                or already on the board),
-   *   target:      winning score (e.g. 10000),
-   *   bestRival:   highest score among the other players,
-   *   finalRound:  true when someone already reached the target,
+   *   target:      winning score (must be reached exactly),
    * }
    * @returns true to roll again, false to bank.
    */
   function shouldRoll(ctx, profile) {
+    const bankedTotal = ctx.bankedScore + ctx.turnScore;
+    // Past the target: banking is illegal, the only move is to roll on.
+    if (bankedTotal > ctx.target) {
+      return true;
+    }
+    // Banking now lands exactly on the target: instant win.
+    if (bankedTotal === ctx.target) {
+      return false;
+    }
     // Not on the board yet: banking below the opening threshold is illegal.
     if (ctx.turnScore < ctx.opening) {
       return true;
     }
-    // Banking now would win: take it.
-    const bankedTotal = ctx.bankedScore + ctx.turnScore;
-    if (bankedTotal >= ctx.target && (!ctx.finalRound || bankedTotal > ctx.bestRival)) {
+    // Close to the target: bank small amounts and creep to an exact finish
+    // rather than risk overshooting on the next keep.
+    if (ctx.target - bankedTotal <= 300) {
       return false;
-    }
-    // Final round: banking is pointless unless it beats the leader.
-    if (ctx.finalRound && bankedTotal <= ctx.bestRival) {
-      return true;
     }
 
     const pFarkle = FARKLE_P[ctx.diceLeft];
