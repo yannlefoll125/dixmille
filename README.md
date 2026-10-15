@@ -43,16 +43,23 @@ installed on your phone from there.
   **taken and validated** — it cannot be left on the table, and the player
   cannot bank right after keeping it: the remaining dice must be rolled
   first. A consequence of the exact finish: a triple can never be the
-  final scoring move, since validating it forces a roll whose points would
-  pass the target.
+  final scoring move, since validating it forces at least 50 more points.
 - Scoring: single 1 = 100, single 5 = 50, three 1s = 1,000, three of a kind =
   face × 100 (six of a face = two triples), full suite 1–6 = 2,000,
   three pairs = 1,500 (four of a kind + a pair counts). No other specials.
 - **Opening**: until a player is on the board, they must score **750** in a
   single turn to bank.
 - **Exact finish**: the first player to bank **exactly 10,000** wins on the
-  spot. Banking a total that would pass 10,000 is illegal; the player must
-  keep rolling instead.
+  spot.
+- **Bust**: a hand always counts for its **maximalist** score. As soon as
+  banked score + turn points would pass 10,000 — counting the best score of
+  the dice just rolled, plus the forced minimum of 50 when every maximal
+  keep would still leave a three-of-a-kind to validate — the turn ends
+  immediately and its points are lost (no fresh-throw penalty: the roll did
+  score). Example: at 9,900, rolling a 1 and a 5 busts, because the hand
+  must be counted as 150; at 9,800, rolling three 2s and nothing else busts,
+  because the mandatory 200 lands on 10,000 but validating the triple would
+  add at least 50.
 
 ## Computer players
 

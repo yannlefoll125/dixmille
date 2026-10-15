@@ -214,8 +214,6 @@
       if (game.mustValidate) {
         el.selectionScore.textContent =
           'Three of a kind must be validated — roll the remaining dice';
-      } else if (game.turnScore > 0 && game.wouldOvershoot()) {
-        el.selectionScore.textContent = `Banking would pass ${game.target} — you must roll on`;
       } else {
         el.selectionScore.textContent = '';
       }
@@ -234,13 +232,11 @@
         ? `Keep & roll ${nextCount}`
         : 'Select scoring dice';
       const wouldHave = game.turnScore + (legal ? res.score : 0);
-      const overshoot = game.player.score + wouldHave > game.target;
       const needsValidation =
         legal && Scoring.keepNeedsValidation(Scoring.faceCounts(sel), res.combo);
       el.btnBank.disabled =
         !legal ||
         wouldHave < game.openingFor(game.player) ||
-        overshoot ||
         needsValidation;
       if (sel.length === 0) {
         el.selectionScore.textContent = 'Tap dice to set them aside';
@@ -254,11 +250,9 @@
             : res.combo === 'threePairs'
               ? ' — three pairs!'
               : '';
-        const hint = overshoot
-          ? ' (past 10,000 — cannot bank)'
-          : needsValidation
-            ? ' (triple: roll again to validate before banking)'
-            : '';
+        const hint = needsValidation
+          ? ' (triple: roll again to validate before banking)'
+          : '';
         el.selectionScore.textContent = `Selected: +${res.score}${comboName}${hint}`;
       } else {
         el.selectionScore.textContent = 'Selection does not score';
@@ -310,7 +304,7 @@
     if (!ev) {
       return;
     }
-    if (ev.type === 'farkle') {
+    if (ev.type === 'farkle' || ev.type === 'bust') {
       handleFarkle(ev);
       return;
     }
@@ -359,22 +353,41 @@
     }
   }
 
+  /* Shows a turn-ending roll (farkle or bust), then advances the game. */
   function handleFarkle(ev) {
-    const bits = [];
-    if (ev.lost > 0) {
-      bits.push(`${ev.lost} turn points lost`);
+    if (ev.type === 'bust') {
+      const why = ev.forcedRoll
+        ? `the hand's ${ev.handScore} must be validated with at least 50 more`
+        : `the hand counts for ${ev.handScore}`;
+      setStatus(
+        `Bust! That would pass ${game.target} — turn lost` +
+          (ev.lost > 0 ? ` (${ev.lost} points gone)` : ''),
+        'farkle'
+      );
+      logLine(
+        `${game.player.name} busts: ${why}, passing ${game.target}` +
+          (ev.lost > 0 ? ` — ${ev.lost} turn points lost` : '')
+      );
+    } else {
+      const bits = [];
+      if (ev.lost > 0) {
+        bits.push(`${ev.lost} turn points lost`);
+      }
+      if (ev.penalty > 0) {
+        bits.push(`−${ev.penalty} from the score`);
+      }
+      setStatus(
+        `Farkle! ${bits.length ? bits.join(', ') : 'No score'}`,
+        'farkle'
+      );
+      logLine(
+        `${game.player.name} farkles` +
+          (ev.lost > 0 ? ` and loses ${ev.lost}` : '') +
+          (ev.penalty > 0
+            ? ` — fresh throw scored nothing: −${ev.penalty} (now ${ev.total})`
+            : '')
+      );
     }
-    if (ev.penalty > 0) {
-      bits.push(`−${ev.penalty} from the score`);
-    }
-    setStatus(`Farkle! ${bits.length ? bits.join(', ') : 'No score'}`, 'farkle');
-    logLine(
-      `${game.player.name} farkles` +
-        (ev.lost > 0 ? ` and loses ${ev.lost}` : '') +
-        (ev.penalty > 0
-          ? ` — fresh throw scored nothing: −${ev.penalty} (now ${ev.total})`
-          : '')
-    );
     renderAll({ animate: true });
     const wasHuman = !game.player.isAI;
     const token = aiToken; // a new game invalidates this pending timeout
@@ -453,7 +466,7 @@
           return;
         }
 
-        if (ev.type === 'farkle') {
+        if (ev.type === 'farkle' || ev.type === 'bust') {
           aiRunning = false;
           handleFarkle(ev);
           return;
