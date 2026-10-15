@@ -172,6 +172,20 @@
   }
 
   /**
+   * Per-face counts the UI should preselect on a fresh roll: every mandatory
+   * three-of-a-kind, and the whole roll when it scores as a straight or
+   * three pairs (those six-dice combinations are always the right take).
+   * The player can still change the selection; this only saves taps.
+   */
+  function defaultKeeps(rollDice) {
+    const res = scoreSelection(rollDice);
+    if (res.valid && (res.combo === 'straight' || res.combo === 'threePairs')) {
+      return faceCounts(rollDice);
+    }
+    return mandatoryKeeps(rollDice);
+  }
+
+  /**
    * The maximalist value of a roll: the hand always counts for its BEST
    * score (used for the overshoot/bust rule — a player cannot under-count
    * a hand to stay below the target). `forcedRoll` is true when every
@@ -261,5 +275,6 @@
     satisfiesMandatory,
     keepNeedsValidation,
     maximalKeep,
+    defaultKeeps,
   };
 });

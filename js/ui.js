@@ -273,6 +273,18 @@
 
   /* ---------- Human actions ---------- */
 
+  /** Preselect what has to be taken: triples, three pairs, full suite. */
+  function preselectMandatory() {
+    selection.clear();
+    const need = Scoring.defaultKeeps(game.roll).slice();
+    game.roll.forEach((v, i) => {
+      if (need[v] > 0) {
+        need[v]--;
+        selection.add(i);
+      }
+    });
+  }
+
   function toggleDie(index) {
     if (!isHumanTurn() || game.phase !== 'awaitKeep') {
       return;
@@ -308,6 +320,7 @@
       handleFarkle(ev);
       return;
     }
+    preselectMandatory();
     setStatus('Set aside scoring dice');
     renderAll({ animate: true });
     saveGame();
@@ -576,6 +589,7 @@
       game.resolveFarkle();
     }
     if (game.phase === 'awaitKeep' && !game.player.isAI) {
+      preselectMandatory();
       setStatus('Set aside scoring dice');
       renderAll();
       saveGame();
