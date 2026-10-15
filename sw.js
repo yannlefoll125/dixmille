@@ -23,7 +23,12 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) => cache.addAll(ASSETS))
+      // 'no-cache' revalidates against the server: GitHub Pages serves with
+      // a 10-minute HTTP cache, which could otherwise pre-cache stale files
+      // right after a deploy.
+      .then((cache) =>
+        cache.addAll(ASSETS.map((url) => new Request(url, { cache: 'no-cache' })))
+      )
       .then(() => self.skipWaiting())
   );
 });
