@@ -171,6 +171,26 @@
     return false;
   }
 
+  /**
+   * The maximalist value of a roll: the hand always counts for its BEST
+   * score (used for the overshoot/bust rule — a player cannot under-count
+   * a hand to stay below the target). `forcedRoll` is true when every
+   * maximal-score selection still holds an unvalidated three-of-a-kind,
+   * i.e. the turn cannot stop here and must score at least 50 more.
+   * Returns null when the roll does not score at all (farkle).
+   */
+  function maximalKeep(dice) {
+    const options = validSelections(dice);
+    if (options.length === 0) {
+      return null;
+    }
+    const score = options[0].score;
+    const forcedRoll = options
+      .filter((o) => o.score === score)
+      .every((o) => keepNeedsValidation(o.keepCounts, o.combo));
+    return { score, forcedRoll };
+  }
+
   /** True when a roll contains at least one scoring option. */
   function hasAnyScore(dice) {
     const counts = faceCounts(dice);
@@ -240,5 +260,6 @@
     mandatoryKeeps,
     satisfiesMandatory,
     keepNeedsValidation,
+    maximalKeep,
   };
 });

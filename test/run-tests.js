@@ -438,41 +438,98 @@ test('banking exactly 10000 wins on the spot', () => {
   assert.strictEqual(game.winner, 0);
 });
 
-test('banking past 10000 is illegal', () => {
+/* ---------- Bust: the hand counts for its maximalist score ---------- */
+
+test('maximalKeep values a roll at its best score', () => {
+  assert.deepStrictEqual(Scoring.maximalKeep([1, 5, 2, 2]), {
+    score: 150,
+    forcedRoll: false,
+  });
+  // The mandatory triple is the only score: validation is forced.
+  assert.deepStrictEqual(Scoring.maximalKeep([2, 2, 2, 3, 4, 6]), {
+    score: 200,
+    forcedRoll: true,
+  });
+  // A straight is its own combination, no validation.
+  assert.deepStrictEqual(Scoring.maximalKeep([1, 2, 3, 4, 5, 6]), {
+    score: 2000,
+    forcedRoll: false,
+  });
+  assert.strictEqual(Scoring.maximalKeep([2, 3, 4, 6]), null);
+});
+
+test('at 9900, rolling a 1 and a 5 busts (the hand must be marked as 150)', () => {
   const game = new Game({
     aiCount: 1,
-    rng: seededRng([1, 5, 2, 3, 4, 6]),
+    rng: seededRng([1, 5, 2, 3, 4, 4]),
   });
   game.players[0].score = 9900;
   game.players[0].onBoard = true;
-  game.rollDice();
-  game.keepDice([0, 1]); // 1 + 5 = 150 -> 10050 would overshoot
-  assert.strictEqual(game.wouldOvershoot(), true);
-  assert.strictEqual(game.canBank(), false);
-  assert.strictEqual(game.bank(), null);
-  assert.strictEqual(game.phase, 'awaitRoll'); // forced to roll on
+  const ev = game.rollDice();
+  assert.strictEqual(ev.type, 'bust'); // keeping only the 5 is no escape
+  assert.strictEqual(ev.handScore, 150);
+  assert.strictEqual(ev.lost, 0);
+  assert.strictEqual(game.players[0].score, 9900); // no fresh-throw penalty
+  game.resolveFarkle();
+  assert.strictEqual(game.currentPlayer, 1);
 });
 
-test('a triple landing exactly on the target cannot end the game (must be validated)', () => {
-  // Needs 200; rolls three 2s: the triple must be taken (200 = exactly
-  // 10,000) but banking is illegal until it is validated by rolling on —
-  // and any later scoring keep would pass the target.
+test('at 9800, rolling three 2s and nothing else busts (validation forces +50)', () => {
   const game = new Game({
     aiCount: 1,
     rng: seededRng([2, 2, 2, 3, 4, 6]),
   });
   game.players[0].score = 9800;
   game.players[0].onBoard = true;
+  const ev = game.rollDice();
+  assert.strictEqual(ev.type, 'bust'); // 200 lands on 10000, but +50 is forced
+  assert.strictEqual(ev.handScore, 200);
+  assert.strictEqual(ev.forcedRoll, true);
+  assert.strictEqual(game.players[0].score, 9800);
+});
+
+test('a mid-turn bust loses the points gathered this turn', () => {
+  const game = new Game({
+    aiCount: 1,
+    rng: seededRng([5, 5, 2, 3, 4, 6, /* next roll: */ 1, 1, 1, 1]),
+  });
+  game.players[0].score = 9000;
+  game.players[0].onBoard = true;
   game.rollDice();
-  assert.strictEqual(game.keepDice([3]), null); // cannot dodge the triple
-  const keep = game.keepDice([0, 1, 2]);
-  assert.strictEqual(keep.score, 200);
-  assert.strictEqual(keep.needsValidation, true);
-  assert.strictEqual(game.turnScore, 200); // would be exactly 10000...
-  assert.strictEqual(game.wouldOvershoot(), false);
-  assert.strictEqual(game.canBank(), false); // ...but the triple is unvalidated
-  assert.strictEqual(game.bank(), null);
-  assert.strictEqual(game.phase, 'awaitRoll'); // forced to roll the other three
+  game.keepDice([0, 1]); // two 5s = 100 -> 9100
+  const ev = game.rollDice(); // four 1s: max 1100 -> 10200
+  assert.strictEqual(ev.type, 'bust');
+  assert.strictEqual(ev.lost, 100);
+  game.resolveFarkle();
+  assert.strictEqual(game.players[0].score, 9000);
+});
+
+test('no bust when the maximal hand lands exactly on 10000 without a triple', () => {
+  const game = new Game({
+    aiCount: 1,
+    rng: seededRng([1, 1, 2, 3, 4, 6]),
+  });
+  game.players[0].score = 9800;
+  game.players[0].onBoard = true;
+  const ev = game.rollDice();
+  assert.strictEqual(ev.type, 'roll'); // two 1s = 200 -> exactly 10000
+  game.keepDice([0, 1]);
+  const bank = game.bank();
+  assert.strictEqual(bank.won, true);
+  assert.strictEqual(game.winner, 0);
+});
+
+test('no bust while the maximal hand stays under the target', () => {
+  const game = new Game({
+    aiCount: 1,
+    rng: seededRng([5, 2, 3, 4, 6, 6]),
+  });
+  game.players[0].score = 9900;
+  game.players[0].onBoard = true;
+  const ev = game.rollDice();
+  assert.strictEqual(ev.type, 'roll'); // max is the lone 5 -> 9950
+  game.keepDice([0]);
+  assert.strictEqual(game.canBank(), true);
 });
 
 test('a kept triple is validated by a later triple-free keep', () => {
@@ -518,7 +575,7 @@ test('1000 simulated AI games always finish legally', () => {
 
     while (game.phase !== 'gameOver' && safety-- > 0) {
       const ev = game.rollDice();
-      if (ev.type === 'farkle') {
+      if (ev.type === 'farkle' || ev.type === 'bust') {
         game.resolveFarkle();
         continue;
       }

@@ -9,9 +9,11 @@
  * rolled next, plus a per-difficulty banking threshold. The exact-10,000
  * rule shapes the endgame: a keep that lands exactly on the target is a win
  * — unless it holds a triple, which must be validated by rolling on and so
- * can never be the finishing keep — one that passes the target dooms the
- * turn, and near the target the AI banks small amounts to creep to an
- * exact finish.
+ * can never be the finishing keep — and near the target the AI banks small
+ * amounts to creep to an exact finish. Overshooting is handled by the game
+ * itself: a roll whose maximalist value passes the target busts the turn
+ * before the AI gets to choose (the overshoot penalties below are
+ * defensive).
  */
 (function (root, factory) {
   if (typeof module !== 'undefined' && module.exports) {

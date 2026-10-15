@@ -2,8 +2,13 @@
  * Game state machine for 10,000 — house rules:
  *
  *  - Opening threshold: 750 in a single turn before the first bank.
- *  - The target (10,000) must be reached EXACTLY: banking a total that would
- *    pass it is illegal, and banking exactly 10,000 wins on the spot.
+ *  - The target (10,000) must be reached EXACTLY: banking exactly 10,000
+ *    wins on the spot.
+ *  - BUST: a hand always counts for its maximalist score. As soon as a roll's
+ *    best score would take banked + turn past the target — or exactly onto it
+ *    while a three-of-a-kind would still have to be validated (forcing at
+ *    least 50 more) — the turn ends immediately and its points are lost
+ *    (no fresh-throw penalty: the roll did score).
  *  - A fresh throw (the FIRST throw of a turn) that scores nothing costs
  *    2,000 banked points — unless the player has not started scoring yet
  *    (not on board). The score may go negative. A farkle later in the turn
@@ -116,6 +121,26 @@
           roll: this.roll.slice(),
           lost,
           penalty,
+          total: this.player.score,
+        };
+      }
+      // Bust check: the hand counts for its maximalist score. If that (plus
+      // the forced minimum 50 when every maximal keep still needs a
+      // validation roll) passes the target, the turn stops here, lost.
+      const max = Scoring.maximalKeep(this.roll);
+      const maxTotal = this.player.score + this.turnScore + max.score;
+      if (
+        maxTotal > this.target ||
+        (maxTotal === this.target && max.forcedRoll)
+      ) {
+        const lost = this.turnScore;
+        this.phase = 'farkled';
+        return {
+          type: 'bust',
+          roll: this.roll.slice(),
+          lost,
+          handScore: max.score,
+          forcedRoll: max.forcedRoll,
           total: this.player.score,
         };
       }
