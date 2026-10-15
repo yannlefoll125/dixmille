@@ -687,12 +687,54 @@
   loadSettings();
   showSetup();
 
-  /* ---------- Service worker ---------- */
+  /* ---------- Service worker & updates ----------
+   * The worker uses skipWaiting + clients.claim, so a downloaded update
+   * takes control as soon as it installs. We check for updates on every
+   * launch AND whenever the app returns to the foreground (installed PWAs
+   * are often resumed, not relaunched, so launch-time checks alone are not
+   * enough), then reload once to show the new version — unless a game is
+   * in progress, where the update silently applies on the next launch. */
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(() => {
-        /* offline install unavailable (e.g. served from file://) */
+      navigator.serviceWorker
+        .register('sw.js')
+        .then((reg) => {
+          reg.update().catch(() => {});
+          document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+              reg.update().catch(() => {});
+            }
+          });
+        })
+        .catch(() => {
+          /* offline install unavailable (e.g. served from file://) */
+        });
+
+      let hadController = !!navigator.serviceWorker.controller;
+      let reloading = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!hadController) {
+          hadController = true; // first install, the page is already current
+          return;
+        }
+        if (reloading) {
+          return;
+        }
+        const midGame =
+          game &&
+          game.phase !== 'gameOver' &&
+          !el.screenGame.classList.contains('hidden');
+        if (midGame) {
+          const footer = $('version-footer');
+          if (footer) {
+            footer.textContent =
+              'Update downloaded — it applies the next time you open the app';
+          }
+          return;
+        }
+        reloading = true;
+        window.location.reload();
       });
     });
   }
