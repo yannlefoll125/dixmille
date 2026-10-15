@@ -156,6 +156,46 @@ test('keepNeedsValidation: plain triples yes, singles/specials no', () => {
   );
 });
 
+/* ---------- defaultKeeps (UI preselection) ---------- */
+
+test('defaultKeeps preselects mandatory triples only', () => {
+  const keeps = Scoring.defaultKeeps([2, 2, 2, 1, 5, 6]);
+  assert.strictEqual(keeps[2], 3);
+  assert.strictEqual(keeps[1], 0); // the 1 and 5 stay the player's choice
+  assert.strictEqual(keeps[5], 0);
+});
+
+test('defaultKeeps preselects the whole roll for a full suite', () => {
+  const keeps = Scoring.defaultKeeps([3, 1, 6, 2, 5, 4]);
+  for (let face = 1; face <= 6; face++) {
+    assert.strictEqual(keeps[face], 1);
+  }
+});
+
+test('defaultKeeps preselects the whole roll for three pairs', () => {
+  const keeps = Scoring.defaultKeeps([2, 2, 3, 3, 6, 6]);
+  assert.deepStrictEqual(keeps.slice(1), [0, 2, 2, 0, 0, 2]);
+});
+
+test('defaultKeeps preselects four of a kind + pair as three pairs', () => {
+  const keeps = Scoring.defaultKeeps([4, 4, 4, 4, 6, 6]);
+  assert.deepStrictEqual(keeps.slice(1), [0, 0, 0, 4, 0, 2]);
+});
+
+test('defaultKeeps preselects both triples of a double-triple roll', () => {
+  // Plain reading wins the tie over three pairs; both triples are mandatory.
+  const keeps = Scoring.defaultKeeps([1, 1, 1, 5, 5, 5]);
+  assert.strictEqual(keeps[1], 3);
+  assert.strictEqual(keeps[5], 3);
+});
+
+test('defaultKeeps preselects nothing on a singles-only roll', () => {
+  assert.deepStrictEqual(
+    Scoring.defaultKeeps([1, 5, 2, 3, 4, 4]).slice(1),
+    [0, 0, 0, 0, 0, 0]
+  );
+});
+
 /* ---------- Farkle detection ---------- */
 
 test('2,3,4,6,6,3 has no score (farkle)', () => {
