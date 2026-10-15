@@ -365,6 +365,16 @@ body {
   padding: 1px 2px;
 }
 
+.version-footer {
+  max-width: 520px;
+  margin: 18px auto 0;
+  padding: 0 12px 10px;
+  text-align: center;
+  font-size: 0.7rem;
+  opacity: 0.55;
+  overflow-wrap: anywhere;
+}
+
 /* ---------- Overlays ---------- */
 
 .overlay {

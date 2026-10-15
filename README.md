@@ -29,6 +29,13 @@ repository settings, under **Pages**, set the source to **GitHub Actions**.
 The app is then served at `https://<user>.github.io/dixmille/` and can be
 installed on your phone from there.
 
+The deploy stamps `js/version.js` and the service worker cache name with the
+workflow run number, commit date and the start of the commit message; the
+footer at the bottom of the app shows exactly which build is installed
+(local checkouts show "Development build"). Because the cache name changes
+on every deploy, installed apps pick the new version up on their next
+restart with network access.
+
 ## Rules implemented (house rules)
 
 - Six dice; set aside scoring dice after each roll, then either roll the

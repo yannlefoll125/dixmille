@@ -672,6 +672,18 @@
     el.overlayRules.classList.add('hidden')
   );
 
+  (function renderVersion() {
+    const footer = $('version-footer');
+    const v = window.APP_VERSION;
+    if (!footer || !v) {
+      return;
+    }
+    footer.textContent =
+      v.build === 'dev'
+        ? 'Development build'
+        : `Build ${v.build} · ${v.date} · ${v.message}`;
+  })();
+
   loadSettings();
   showSetup();
 

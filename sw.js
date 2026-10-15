@@ -1,10 +1,13 @@
-/* Service worker: pre-cache the app shell so the game runs fully offline. */
-const CACHE_NAME = 'dixmille-v3';
+/* Service worker: pre-cache the app shell so the game runs fully offline.
+ * CACHE_NAME is rewritten to dixmille-build-<n> at deploy time, so every
+ * deploy invalidates the cache and installed apps pick up the new version. */
+const CACHE_NAME = 'dixmille-v4';
 
 const ASSETS = [
   './',
   './index.html',
   './css/styles.css',
+  './js/version.js',
   './js/scoring.js',
   './js/ai.js',
   './js/game.js',
